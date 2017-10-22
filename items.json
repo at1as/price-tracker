@@ -1,0 +1,32 @@
+{
+	"Items": [
+		{
+			"Name": "Seagate 8 TB Hard Drive",
+			"Link": "https://www.amazon.com/Seagate-Expansion-Desktop-External-STEB8000100/dp/B01HAPGEIE",
+			"Prices": [
+				{
+					"Date": "2017-10-21",
+					"Price": "$169.99"
+				},
+				{
+					"Date": "2017-10-22",
+					"Price": "$169.99"
+				}
+			]
+		},
+		{
+			"Name": "Western Digital 8 TB Hard Drive",
+			"Link": "https://www.amazon.com/dp/B01LQQHLGC/ref=twister_B0751SCZW7",
+			"Prices": [
+				{
+					"Date": "2017-10-21",
+					"Price": "$198.99"
+				},
+				{
+					"Date": "2017-10-22",
+					"Price": "$198.99"
+				}
+			]
+		}
+	]
+}

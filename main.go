@@ -34,19 +34,28 @@ type Config struct {
 
 func main() {
 
-  log.Printf("Fetching today's prices...\n\n")
+  log.Printf("Fetching today's prices...")
 
   json_file := "items.json"
   product_link_map := getProductList(json_file)
 
   for name, link := range product_link_map {
     price := getPriceFromSite(name, link)
+    
+    fmt.Println("")
     log.Printf(`Today's price for "%s" is %s`, name, price)
+    fmt.Println("")
 
     addPriceToProductList(name, price, json_file)
 
     average_price, sample_size := getAveragePriceForItem(name, json_file)
-    log.Printf("The Average price for this item was $%.2f over %d samples\n\n", average_price, sample_size)
+    log.Printf("The Average price for this item was $%.2f over %d samples", average_price, sample_size)
+
+    min_price, max_price, valid := getMinMaxPriceForItem(name, json_file)
+    if valid {
+      log.Printf("The max price for this item was %s on %s", max_price.Price, max_price.Date)
+      log.Printf("The min price for this item was %s on %s", min_price.Price, min_price.Date)
+    }
   }
 }
 
@@ -171,6 +180,48 @@ func getAveragePriceForItem(name string, filename string) (float32, int) {
   return price_total / float32(samples), samples
 }
 
+
+func getMinMaxPriceForItem(name string, filename string) (Price, Price, bool) {
+  
+  raw, err := ioutil.ReadFile(filename)
+
+  if err != nil {
+    panic("Failed to read JSON file : " + filename + " => " + err.Error())
+  }
+  
+  var conf Config
+  json.Unmarshal(raw, &conf)
+  
+  valid := false
+  samples := 0
+  var min_price Price
+  var max_price Price
+
+  for item := range conf.Items {
+    if conf.Items[item].Name == name {
+      for i := range conf.Items[item].Prices {
+        
+        current_price := conf.Items[item].Prices[i]
+
+        if current_price.Price > max_price.Price {
+          max_price = current_price
+        }
+
+        if current_price.Price < min_price.Price || i == 0 {
+          min_price = current_price
+        }
+
+        samples += 1
+      }
+    }
+  }
+
+  if samples > 0 { 
+    valid = true
+  }
+
+  return min_price, max_price, valid
+}
 
 
 func toJson(j Config) string {
