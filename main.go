@@ -2,9 +2,12 @@ package main
 
 import (
   "encoding/json"
+  "io/ioutil"
+  "fmt"
   "log"
   "net/http"
   "strings"
+  "time"
 
   "github.com/lestrrat/go-libxml2"
   "github.com/lestrrat/go-libxml2/types"
@@ -48,11 +51,14 @@ var itemList = `{
 func main() {
 
   log.Printf("Fetching today's prices...")
-  productLinkMap := getProductList()
+  
+  product_link_map := getProductList()
 
-  for name, link := range productLinkMap {
+  for name, link := range product_link_map {
     price := getPrice(name, link)
-    log.Printf(`Today's price for "%s" is %s`, name, price)  
+    log.Printf(`Today's price for "%s" is %s`, name, price)
+
+    addPriceToProductList(name, price)
   }
 }
 
@@ -100,5 +106,60 @@ func getProductList() map[string]string {
   }
   
   return name_link
+}
+
+
+func addPriceToProductList(name string, price string) {
+
+  filename := "items.json"
+  raw, err := ioutil.ReadFile(filename)
+
+  if err != nil {
+    panic("Failed to read JSON file : " + filename + " => " + err.Error())
+  }
+  
+  var conf Config
+  json.Unmarshal(raw, &conf)
+
+  for item := range conf.Items {
+    if conf.Items[item].Name == name {
+      
+      var p Price
+      p.Date = getDate()
+      p.Price = price
+  
+      conf.Items[item].Prices = append(conf.Items[item].Prices, p)
+    } 
+  }
+
+  fmt.Println(toJson(conf))
+
+  writeFile(toJson(conf), "items.json")
+}
+
+
+func toJson(j Config) string {
+  bytes, err := json.Marshal(j)
+
+  if err != nil {
+    panic("Failed to save as JSON " + err.Error())
+  }
+
+  return string(bytes)
+}
+
+
+func writeFile(text string, filename string) {
+  err := ioutil.WriteFile(filename, []byte(text), 0644)
+
+  if err != nil {
+    panic("Failed to write JSON file to : " + filename + " => " + err.Error())
+  }
+}
+
+
+func getDate() string {
+  // => "YYYY-MM-DD"
+  return strings.Split(time.Now().Format(time.RFC3339), "T")[0]
 }
 
