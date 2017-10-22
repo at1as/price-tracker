@@ -6,6 +6,7 @@ import (
   "fmt"
   "log"
   "net/http"
+  "strconv"
   "strings"
   "time"
 
@@ -31,39 +32,26 @@ type Config struct {
 }
 
 
-var itemList = `{
-  "items": [
-    {
-      "name": "Seagate 8 TB Hard Drive",
-      "link": "https://www.amazon.com/Seagate-Expansion-Desktop-External-STEB8000100/dp/B01HAPGEIE",
-      "prices": []
-    },
-    {
-      "name": "Western Digital 8 TB Hard Drive",
-      "link": "https://www.amazon.com/dp/B01LQQHLGC/ref=twister_B0751SCZW7",
-      "prices": []
-    }
-  ]
-}`
-
-
-
 func main() {
 
-  log.Printf("Fetching today's prices...")
-  
-  product_link_map := getProductList()
+  log.Printf("Fetching today's prices...\n\n")
+
+  json_file := "items.json"
+  product_link_map := getProductList(json_file)
 
   for name, link := range product_link_map {
-    price := getPrice(name, link)
+    price := getPriceFromSite(name, link)
     log.Printf(`Today's price for "%s" is %s`, name, price)
 
-    addPriceToProductList(name, price)
+    addPriceToProductList(name, price, json_file)
+
+    average_price, sample_size := getAveragePriceForItem(name, json_file)
+    log.Printf("The Average price for this item was $%.2f over %d samples\n\n", average_price, sample_size)
   }
 }
 
 
-func getPrice(item_name string, link string) string {
+func getPriceFromSite(item_name string, link string) string {
 
   site := strings.Split(link, "/")[2]
   res, err := http.Get(link)
@@ -92,12 +80,19 @@ func getPrice(item_name string, link string) string {
 }
 
 
-func getProductList() map[string]string {
+func getProductList(filename string) map[string]string {
+  
+  raw, err := ioutil.ReadFile(filename)
+  
+  if err != nil {
+    panic("Failed to read JSON file: " + filename + " => " + err.Error())
+  }
+  
   var conf Config
-  err := json.Unmarshal([]byte(itemList), &conf)
+  err = json.Unmarshal([]byte(raw), &conf)
 
   if err != nil {
-    panic("Failed to read JSON " + err.Error())
+    panic("Failed to parse JSON file: " + filename + " => " + err.Error())
   }
 
   name_link := make(map[string]string)
@@ -109,9 +104,8 @@ func getProductList() map[string]string {
 }
 
 
-func addPriceToProductList(name string, price string) {
+func addPriceToProductList(name string, price string, filename string) {
 
-  filename := "items.json"
   raw, err := ioutil.ReadFile(filename)
 
   if err != nil {
@@ -123,7 +117,14 @@ func addPriceToProductList(name string, price string) {
 
   for item := range conf.Items {
     if conf.Items[item].Name == name {
-      
+
+      // Don't add the price if it's already been added for today
+      for i := range conf.Items[item].Prices {
+        if conf.Items[item].Prices[i].Date == getDate() {
+          return
+        }
+      }
+
       var p Price
       p.Date = getDate()
       p.Price = price
@@ -138,8 +139,42 @@ func addPriceToProductList(name string, price string) {
 }
 
 
+func getAveragePriceForItem(name string, filename string) (float32, int) {
+  
+  raw, err := ioutil.ReadFile(filename)
+
+  if err != nil {
+    panic("Failed to read JSON file : " + filename + " => " + err.Error())
+  }
+  
+  var conf Config
+  json.Unmarshal(raw, &conf)
+  
+  var price_total float32
+  price_total = 0.0
+  samples := 0
+
+  for item := range conf.Items {
+    if conf.Items[item].Name == name {
+      for i := range conf.Items[item].Prices {
+        next_price := conf.Items[item].Prices[i].Price
+        price_total += priceAsFloat(next_price)
+        samples += 1
+      }
+    }
+  }
+
+  if samples == 0 {
+    return 0.0, 0
+  }
+
+  return price_total / float32(samples), samples
+}
+
+
+
 func toJson(j Config) string {
-  bytes, err := json.Marshal(j)
+  bytes, err := json.MarshalIndent(j, "", "\t")
 
   if err != nil {
     panic("Failed to save as JSON " + err.Error())
@@ -163,3 +198,16 @@ func getDate() string {
   return strings.Split(time.Now().Format(time.RFC3339), "T")[0]
 }
 
+
+func priceAsFloat(price string) float32 {
+  // "$169.99" => 169.99
+
+  price_value := strings.Split(price, "$")[1]
+
+  f, err := strconv.ParseFloat(price_value, 32)
+  if err != nil {
+    panic("Failed to parse :" + price + " to a float")              
+  }
+
+  return float32(f)
+}
